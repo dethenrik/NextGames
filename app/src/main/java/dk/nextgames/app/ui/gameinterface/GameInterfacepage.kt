@@ -26,7 +26,6 @@ fun GameInterfacePage(
     val url = remember(encodedUrl) { URLDecoder.decode(encodedUrl, "UTF-8") }
     val vm: GameInterfaceViewModel = viewModel()
     val ctx = LocalContext.current
-
     PageScaffold(title = gameTitle, onBack = onBack) { padding ->
         AndroidView(
             factory = {
