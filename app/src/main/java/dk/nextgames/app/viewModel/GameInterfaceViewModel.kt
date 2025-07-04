@@ -6,31 +6,66 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.database.ServerValue
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 
 class GameInterfaceViewModel : ViewModel() {
 
-    /** ---------- 1) hvem er logget ind? ---------- */
-    private val user = Firebase.auth.currentUser
+    /* ------------------------------------------------------------------ */
+    /*  1) Firebase-bruger & database-reference                           */
+    /* ------------------------------------------------------------------ */
+    private val user  = Firebase.auth.currentUser
+    private val dbRef = Firebase.database.reference
 
-    // JSON sendes til spillet – kan udvides efter behov
-    val userJson: String = JSONObject().apply {
-        put("uid",   user?.uid ?: "")
-        put("name",  user?.displayName ?: "")
-        put("email", user?.email ?: "")
-    }.toString()
+    /**  Bliver læst af AndroidBridge.getUserJson() i JavaScript  */
+    @Volatile
+    var userJson: String = buildJson(displayNameFallback = user?.displayName)
+        private set
 
-    /** ---------- 2) high-score upload ---------- */
+    init {
+        loadNameFromDatabase()   // updatér userJson når navnet er hentet
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Henter `displayName` fra /users/{uid}                             */
+    /* ------------------------------------------------------------------ */
+    private fun loadNameFromDatabase() = viewModelScope.launch(Dispatchers.IO) {
+        val u = user ?: return@launch
+        val snap = dbRef.child("users").child(u.uid).get().await()
+        val dbName = snap.child("displayName").getValue(String::class.java)
+
+        if (!dbName.isNullOrBlank()) {
+            userJson = buildJson(displayNameFallback = dbName)
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Bygger JSON-streng                                                */
+    /* ------------------------------------------------------------------ */
+    private fun buildJson(displayNameFallback: String?): String =
+        JSONObject().apply {
+            put("uid",   user?.uid ?: "")
+            val name = when {
+                !displayNameFallback.isNullOrBlank() -> displayNameFallback
+                !user?.email.isNullOrBlank()         -> user.email!!.substringBefore('@')
+                else                                 -> ""
+            }
+            put("name",  name)
+            put("email", user?.email ?: "")
+        }.toString()
+
+    /* ------------------------------------------------------------------ */
+    /*  2)  High-score upload                                             */
+    /* ------------------------------------------------------------------ */
     fun submitHighScore(
         score:     Int,
         gameId:    String,
         gameTitle: String
-    ) = viewModelScope.launch {
-        val u = user ?: return@launch          // ingen bruger → intet upload
-        val ref = Firebase.database.reference
-            .child("highscores")
-            .push()                            // ny node
+    ) = viewModelScope.launch(Dispatchers.IO) {
+
+        val u = user ?: return@launch
 
         val data = mapOf(
             "uid"         to u.uid,
@@ -41,6 +76,7 @@ class GameInterfaceViewModel : ViewModel() {
             "score"       to score,
             "timestamp"   to ServerValue.TIMESTAMP
         )
-        ref.setValue(data)
+
+        dbRef.child("highscores").push().setValue(data)
     }
 }

@@ -1,7 +1,8 @@
 package dk.nextgames.app.ui.games
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -18,7 +19,7 @@ import coil.compose.AsyncImage
 @Composable
 fun GamesPage(
     onBack: () -> Unit,
-    onGameClicked: (String) -> Unit,
+    onGameClicked: (Game) -> Unit,            // ①  Én parameter!
     vm: GamesViewModel = viewModel()
 ) {
     val state = vm.uiState
@@ -29,31 +30,25 @@ fun GamesPage(
                 title = { Text("Games") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 }
             )
         }
-    ) { inner ->
+    ) { pad ->
         when {
-            state.loading -> Center(inner) { CircularProgressIndicator() }
-
-            state.games.isEmpty() -> Center(inner) {
-                Text("There is no games to show")
-            }
+            state.loading -> Center(pad) { CircularProgressIndicator() }
+            state.games.isEmpty() -> Center(pad) { Text("There is no games to show") }
 
             else -> LazyColumn(
                 modifier = Modifier
-                    .padding(inner)
+                    .padding(pad)
                     .fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(state.games) { game ->
-                    GameCard(game = game) {
-                        // Her sender vi netlifyUrl videre i stedet for id
-                        onGameClicked(game.netlifyUrl)
-                    }
+                    GameCard(game) { onGameClicked(game) }   // ②
                 }
             }
         }
@@ -64,7 +59,7 @@ fun GamesPage(
 private fun GameCard(game: Game, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier
+            Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -84,13 +79,11 @@ private fun GameCard(game: Game, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Center(
-    inner: PaddingValues,
-    content: @Composable BoxScope.() -> Unit
-) = Box(
-    modifier = Modifier
-        .padding(inner)
-        .fillMaxSize(),
-    contentAlignment = Alignment.Center,
-    content = content
-)
+private fun Center(pad: PaddingValues, content: @Composable BoxScope.() -> Unit) =
+    Box(
+        modifier = Modifier
+            .padding(pad)
+            .fillMaxSize(),
+        contentAlignment = Alignment.Center,
+        content = content
+    )
